@@ -6,6 +6,9 @@ import (
 	"path"
 	. "github.com/cloudfoundry-incubator/disaster-recovery-acceptance-tests/runner"
 	. "github.com/onsi/gomega"
+	"fmt"
+	"io/ioutil"
+	"strings"
 )
 
 type CfCredhubSSITestCase struct {
@@ -43,18 +46,24 @@ func (tc *CfCredhubSSITestCase) BeforeBackup(config Config) {
 
 
 	var testAppPath = path.Join(CurrentTestDir(), "/../fixtures/credhub-test-app")
-	RunCommandSuccessfully("cf push --no-start" + tc.appName + " -p " + testAppPath + " -b go_buildpack" + " -f " + testAppPath + "/manifest.yml")
+	RunCommandSuccessfully("cf push " + "--no-start " + tc.appName + " -p " + testAppPath + " -b go_buildpack" + " -f " + testAppPath + "/manifest.yml")
 	RunCommandSuccessfully("cf set-env " + tc.appName + " CREDHUB_CLIENT "+ config.CloudFoundryConfig.CredHubClient)
 	RunCommandSuccessfully("cf set-env " + tc.appName + " CREDHUB_SECRET "+ config.CloudFoundryConfig.CredHubSecret)
-	RunCommandSuccessfully("cf restage " + tc.appName)
+	RunCommandSuccessfully("cf restart " + tc.appName)
 
 	tc.appURL = GetAppUrl(tc.appName)
 
 	appResponse := Get(tc.appURL + "/create")
+	body, _ := ioutil.ReadAll(appResponse.Body)
+	fmt.Println(string(body))
 	Expect(appResponse.StatusCode).To(Equal(http.StatusCreated))
 
 	appResponse = Get(tc.appURL + "/list")
-	Expect(json.NewDecoder(appResponse.Body).Decode(&listResponse)).To(Succeed())
+	defer appResponse.Body.Close()
+	response, err := ioutil.ReadAll(appResponse.Body)
+	Expect(err).NotTo(HaveOccurred())
+
+	Expect(json.NewDecoder(strings.NewReader(string(response))).Decode(&listResponse)).To(Succeed())
 	Expect(listResponse.Credentials).To(HaveLen(1))
 }
 

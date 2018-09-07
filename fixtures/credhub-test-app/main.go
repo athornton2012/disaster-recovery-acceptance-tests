@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
-	"strings"
 	"code.cloudfoundry.org/credhub-cli/credhub"
 	"code.cloudfoundry.org/credhub-cli/credhub/auth"
+	"code.cloudfoundry.org/credhub-cli/credhub/credentials/generate"
+	"strings"
 )
 
 const credhubBaseURL = "https://credhub.service.cf.internal:8844"
@@ -32,38 +32,39 @@ type Server struct {
 
 func (s *Server) Create(w http.ResponseWriter, r *http.Request) {
 	s.counter++
-	resp, err := s.client.Request("POST", fmt.Sprintf("%s/api/v1/data", credhubBaseURL),nil,
-		strings.NewReader(fmt.Sprintf(`{"name": "/%s/%d", "type": "password"}`, credentialName, s.counter)),true)
-	if ok := handleBadResponses(w, resp, err); !ok {
+	password, err := s.client.GeneratePassword(fmt.Sprintf("/%s/%d",credentialName,s.counter),generate.Password{},credhub.Overwrite)
+	if ok := handleBadResponses(w, err); !ok {
 		return
 	}
+	fmt.Println(password)
 	w.WriteHeader(http.StatusCreated)
 }
 
 func (s *Server) List(w http.ResponseWriter, r *http.Request) {
-	resp, err := s.client.Request("GET", fmt.Sprintf("%s/api/v1/data?path=%s", credhubBaseURL, credentialName),nil,nil,true)
-	if ok := handleBadResponses(w, resp, err); !ok {
+	credentials, err := s.client.FindByPartialName("/"+credentialName)
+	if ok := handleBadResponses(w, err); !ok {
 		return
 	}
-	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(w, "Encountered error reading response body from credhub: [%s]", err)
 	}
-	defer resp.Body.Close()
 
-	fmt.Fprintf(w, string(body))
+	var response []string
+	for _, cred := range credentials.Credentials {
+		response = append(response, "{\"name\": \"" + cred.Name+ "\"}")
+	}
+
+	respString := strings.Join(response, ",")
+
+
+	fmt.Fprintf(w, "{ \"credentials\": ["+string(respString)+"]}")
 }
 
-func handleBadResponses(w http.ResponseWriter, resp *http.Response, err error) bool {
+func handleBadResponses(w http.ResponseWriter, err error) bool {
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(w, "Encountered error from credhub: [%s]", err)
-		return false
-	}
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusBadRequest {
-		w.WriteHeader(resp.StatusCode)
-		fmt.Fprintf(w, "Encountered bad response code from credhub: %d", resp.StatusCode)
 		return false
 	}
 	return true
