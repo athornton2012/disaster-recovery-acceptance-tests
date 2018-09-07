@@ -21,6 +21,7 @@ func main() {
 	}
 	http.HandleFunc("/create", s.Create)
 	http.HandleFunc("/list", s.List)
+	http.HandleFunc("/clean", s.Clean)
 
 	log.Fatal(http.ListenAndServe(":"+os.Getenv("PORT"), nil))
 }
@@ -41,7 +42,7 @@ func (s *Server) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) List(w http.ResponseWriter, r *http.Request) {
-	credentials, err := s.client.FindByPartialName("/"+credentialName)
+	results, err := s.client.FindByPartialName("/"+credentialName)
 	if ok := handleBadResponses(w, err); !ok {
 		return
 	}
@@ -51,7 +52,7 @@ func (s *Server) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var response []string
-	for _, cred := range credentials.Credentials {
+	for _, cred := range results.Credentials {
 		response = append(response, "{\"name\": \"" + cred.Name+ "\"}")
 	}
 
@@ -60,6 +61,29 @@ func (s *Server) List(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintf(w, "{ \"credentials\": ["+string(respString)+"]}")
 }
+
+func (s *Server) Clean(w http.ResponseWriter, r *http.Request) {
+	results, err := s.client.FindByPartialName("/"+credentialName)
+
+	if ok := handleBadResponses(w, err); !ok {
+		return
+	}
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Encountered error reading response body from credhub: [%s]", err)
+	}
+
+	for _, cred := range results.Credentials {
+		err = s.client.Delete(cred.Name)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "Encountered error reading response body from credhub: [%s]", err)
+		}
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
 
 func handleBadResponses(w http.ResponseWriter, err error) bool {
 	if err != nil {

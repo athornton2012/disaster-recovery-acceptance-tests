@@ -47,8 +47,8 @@ func (tc *CfCredhubSSITestCase) BeforeBackup(config Config) {
 
 	var testAppPath = path.Join(CurrentTestDir(), "/../fixtures/credhub-test-app")
 	RunCommandSuccessfully("cf push " + "--no-start " + tc.appName + " -p " + testAppPath + " -b go_buildpack" + " -f " + testAppPath + "/manifest.yml")
-	RunCommandSuccessfully("cf set-env " + tc.appName + " CREDHUB_CLIENT "+ config.CloudFoundryConfig.CredHubClient)
-	RunCommandSuccessfully("cf set-env " + tc.appName + " CREDHUB_SECRET "+ config.CloudFoundryConfig.CredHubSecret)
+	RunCommandSuccessfully("cf set-env " + tc.appName + " CREDHUB_CLIENT "+ config.CloudFoundryConfig.CredHubClient + " > /dev/null")
+	RunCommandSuccessfully("cf set-env " + tc.appName + " CREDHUB_SECRET "+ config.CloudFoundryConfig.CredHubSecret + " > /dev/null")
 	RunCommandSuccessfully("cf restart " + tc.appName)
 
 	tc.appURL = GetAppUrl(tc.appName)
@@ -84,4 +84,7 @@ func (tc *CfCredhubSSITestCase) AfterRestore(config Config) {
 
 func (tc *CfCredhubSSITestCase) Cleanup(config Config) {
 	RunCommandSuccessfully("cf delete-org -f acceptance-test-org-" + tc.uniqueTestID)
+	appResponse := Get(tc.appURL + "/clean")
+	Expect(appResponse.StatusCode).To(Equal(http.StatusOK))
+
 }
