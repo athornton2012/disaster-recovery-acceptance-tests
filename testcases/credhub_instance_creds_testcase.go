@@ -83,8 +83,7 @@ func (tc *CfCredhubSSITestCase) AfterRestore(config Config) {
 }
 
 func (tc *CfCredhubSSITestCase) Cleanup(config Config) {
-	RunCommandSuccessfully("cf delete-org -f acceptance-test-org-" + tc.uniqueTestID)
 	appResponse := Get(tc.appURL + "/clean")
 	Expect(appResponse.StatusCode).To(Equal(http.StatusOK))
-
+	RunCommandSuccessfully("cf delete-org -f acceptance-test-org-" + tc.uniqueTestID)
 }
